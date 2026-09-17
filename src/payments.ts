@@ -18,7 +18,6 @@ export const paymentContextSchema = z
     amount: amountSchema,
     currency: currencySchema,
     method: z.literal('CARD'),
-    payment_connection_id: z.string().uuid(),
   })
   .strict();
 

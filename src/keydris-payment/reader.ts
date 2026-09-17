@@ -260,7 +260,7 @@ function isPaymentConnectionEvidence(
 function isApprovedPayment(
   value: unknown,
   expected: PaymentContext,
-): value is PaymentContext {
+): value is PaymentContext & { payment_connection_id: string } {
   if (!value || typeof value !== 'object') return false;
   const payment = value as Record<string, unknown>;
   return (
@@ -268,6 +268,6 @@ function isApprovedPayment(
     payment.amount === expected.amount &&
     payment.currency === expected.currency &&
     payment.method === expected.method &&
-    payment.payment_connection_id === expected.payment_connection_id
+    typeof payment.payment_connection_id === 'string'
   );
 }

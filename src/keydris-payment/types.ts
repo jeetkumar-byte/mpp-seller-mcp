@@ -8,6 +8,9 @@ export type PaymentContext = {
   amount: string;
   currency: string;
   method: 'CARD';
+};
+
+export type ApprovedPaymentContext = PaymentContext & {
   payment_connection_id: string;
 };
 
@@ -32,7 +35,7 @@ export type PaymentRedemption =
       ok: true;
       credentials: CredentialEnvelope[];
       decisionId?: string;
-      approvedPayment?: PaymentContext;
+      approvedPayment?: ApprovedPaymentContext;
       paymentConnection?: PaymentConnectionEvidence;
     }
   | { ok: false; problem: string };
