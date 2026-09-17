@@ -232,10 +232,10 @@ export const purchase = server.tool(
           {
             amount: toMinorUnits(item.amount, item.currency),
             currency: item.currency.toLowerCase(),
+            'automatic_payment_methods[enabled]': true,
+            'automatic_payment_methods[allow_redirects]': 'never',
             confirm: true,
-            error_on_requires_action: true,
-            'payment_method_data[type]': 'card',
-            'payment_method_data[shared_payment_granted_token]': credential.spt,
+            shared_payment_granted_token: credential.spt,
             'metadata[keydris_challenge_id]': credential.challengeId,
           },
           request_id,
