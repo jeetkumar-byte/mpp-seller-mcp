@@ -102,7 +102,7 @@ export const purchase = server.tool(
   {
     name: 'purchase',
     description:
-      'Create a Stripe MPP challenge for a product, or validate a submitted payment credential before a governed charge.',
+      'Create a Stripe MPP challenge for a product, or validate a submitted payment credential before charging with the single eligible seller connection.',
     inputSchema: z.object({
       sku: z.string().min(1),
       quantity: z.number().int().positive().max(100),
@@ -275,7 +275,7 @@ export const refund = server.tool(
   {
     name: 'refund',
     description:
-      'Request a seller-policy-governed Stripe refund for a PaymentIntent.',
+      'Request a seller-policy-governed Stripe refund using the single eligible seller connection.',
     inputSchema: z.object({
       payment_intent_id: z.string().min(1),
       amount: amountSchema,

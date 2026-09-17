@@ -24,6 +24,12 @@ Manufact for hosted deployments:
 Normal MCP requests carry the single-use token in
 `params._meta["keydris/kit_action_token"]`.
 
+The agent supplies amount, currency, method, and transaction type. It does not
+supply a Keydris payment connection id. During redemption, Keydris selects the
+single seller Stripe connection allowed by the runtime session's policy version
+for purchase, refund, and payment-status calls. Calls fail closed when no seller
+connection or more than one seller connection matches.
+
 ## Develop
 
 ```bash
