@@ -22,7 +22,15 @@ export function issueChallenge(
   }
   const unsigned = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const mac = signature(unsigned, secret).toString('base64url');
-  return stripeChallengeSchema.parse({ ...payload, id: `ch_${unsigned}.${mac}` });
+  return stripeChallengeSchema.parse({
+    id: `ch_${unsigned}.${mac}`,
+    method: payload.method,
+    intent: payload.intent,
+    amount: payload.amount,
+    currency: payload.currency,
+    networkId: payload.networkId,
+    expiresAt: payload.expiresAt,
+  });
 }
 
 export function verifyChallenge(id: string, secret: string): ChallengePayload {
