@@ -2,10 +2,12 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { stripeChallengeSchema, type StripeChallenge } from './payments.js';
 
-const payloadSchema = stripeChallengeSchema.extend({
-  sku: z.string().min(1),
-  quantity: z.number().int().positive(),
-});
+const payloadSchema = stripeChallengeSchema
+  .omit({ id: true })
+  .extend({
+    sku: z.string().min(1),
+    quantity: z.number().int().positive(),
+  });
 
 type ChallengePayload = z.infer<typeof payloadSchema>;
 
@@ -26,7 +28,7 @@ function signaturesMatch(encoded: string, encodedMac: string, secret: string): b
 }
 
 export function issueChallenge(
-  payload: Omit<ChallengePayload, 'id'>,
+  payload: ChallengePayload,
   secret: string,
 ): StripeChallenge {
   if (secret.length < 32) {
