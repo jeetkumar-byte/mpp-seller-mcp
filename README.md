@@ -43,3 +43,10 @@ npm run deploy -- --name keydris-seller-mcp --open
 Configure the seller environment variables in Manufact before exercising its
 tools. After the first GitHub-backed deployment, pushes to the configured
 production branch redeploy this server automatically.
+
+## Kit Reader boundary
+
+`src/keydris` is an unchanged vendored subset of the open-source Apache-2.0
+Kit Reader. `src/keydris-payment` is this server's adapter for sending the
+downstream target and payment context to the Keydris gateway. The backend alone
+evaluates payment policy and chooses whether credentials may be released.

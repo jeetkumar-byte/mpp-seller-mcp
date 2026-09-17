@@ -1,11 +1,3 @@
-// Vendored from @keydris/kit-reader (keydris-reader/node/packages/kit-reader).
-// As of upstream v0.2.0 the library carries the same gateway contract as this
-// fork: KIT redemption requires the downstream `target` (host, path, method)
-// alongside the MCP action — see keydris-api packages/shared gateway.dto.ts.
-// ./token.ts and ./credentials.ts are verbatim; ./redeem.ts matches upstream.
-// The mcp-use adapter in ./middleware.ts is local code (upstream ships an
-// Express adapter with the same armed-spend pattern).
-
 /** Mirrors the gateway's `credentialEnvelopeSchema`. */
 export type CredentialEnvelope = {
   type: 'header' | 'query';
@@ -20,38 +12,8 @@ export type CredentialEnvelope = {
  * failure that leaves it guessing. `problem` is that explanation.
  */
 export type Redemption =
-  | {
-      ok: true;
-      credentials: CredentialEnvelope[];
-      decisionId?: string;
-      approvedPayment?: PaymentContext;
-      paymentConnection?: PaymentConnectionEvidence;
-    }
+  | { ok: true; credentials: CredentialEnvelope[] }
   | { ok: false; problem: string };
-
-export type PaymentContext = {
-  transaction_type: 'spend' | 'refund';
-  amount: string;
-  currency: string;
-  method: 'CARD';
-  payment_connection_id: string;
-};
-
-export type PaymentReference = {
-  challenge_id?: string;
-  spt_id?: string;
-};
-
-export type PaymentAuthorization = {
-  payment: PaymentContext;
-  reference?: PaymentReference;
-};
-
-export type PaymentConnectionEvidence = {
-  role: 'buyer' | 'seller';
-  payment_method_id?: string;
-  network_business_profile?: string;
-};
 
 /**
  * The call the token was minted for. Sent alongside the token so the gateway
@@ -65,22 +27,6 @@ export type KitActionContext = {
   };
 };
 
-/** HTTP methods the gateway's `target` schema accepts. */
-export type TargetMethod =
-  'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
-
-/**
- * The downstream request the credential is for. The gateway matches it against
- * the vault's host/path patterns and evaluates policy against it, so it must
- * name the request that is really about to leave — hostname without port, path
- * without query string.
- */
-export type KitTarget = {
-  host: string;
-  path: string;
-  method: TargetMethod;
-};
-
 /** What `kitActionTokenFrom` found in a JSON-RPC body. */
 export type TokenLookup = {
   token?: string;
@@ -89,19 +35,8 @@ export type TokenLookup = {
 };
 
 export type KitReaderOptions = {
-  /**
-   * The control plane's redemption endpoint, e.g. `https://api.keydris.com/gateway/credentials`.
-   * Must be `https` unless the host is loopback: redemption posts a live token
-   * and receives a raw secret, and neither belongs on a plaintext network hop.
-   */
+  /** The control plane's redemption endpoint, e.g. `https://api.keydris.com/gateway/credentials`. */
   gatewayUrl: string;
-
-  /**
-   * Permit a non-loopback `http` gateway URL. A lab-only escape hatch — a
-   * constructor option rather than an environment variable so the decision is
-   * visible in code review, not buried in deployment config.
-   */
-  allowInsecureGatewayUrl?: boolean;
 
   /**
    * Legacy `/agent/authorize` header accepted as a fallback, lowercased.
@@ -112,13 +47,6 @@ export type KitReaderOptions = {
 
   /** Injectable for tests and for servers that route egress through their own client. */
   fetch?: typeof globalThis.fetch;
-
-  /**
-   * Milliseconds to wait on the gateway before the redemption refuses with
-   * "could not be reached". Defaults to 10000, matching the Python reader's
-   * default transport timeout — a hung gateway must not hang the tool call.
-   */
-  timeoutMs?: number;
 };
 
 export type KitReader = {
@@ -130,9 +58,7 @@ export type KitReader = {
 
   /**
    * Turns the token carried by an MCP request into the credentials the server
-   * needs upstream. `source.target` names the downstream request the credential
-   * is for; the gateway requires it for every KIT redemption, so call this at
-   * the moment the outbound request is known, not before.
+   * needs upstream.
    *
    * Resolves to `undefined` when the body calls no tool: `initialize` and
    * `tools/list` disclose nothing that would justify revealing a secret, so
@@ -141,10 +67,6 @@ export type KitReader = {
    */
   redeem(
     body: unknown,
-    source?: {
-      header?: string;
-      target?: KitTarget;
-      authorization?: PaymentAuthorization;
-    },
+    source?: { header?: string },
   ): Promise<Redemption | undefined>;
 };

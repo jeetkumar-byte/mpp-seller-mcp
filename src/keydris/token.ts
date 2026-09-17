@@ -1,5 +1,3 @@
-// Vendored from @keydris/kit-reader v0.1.0 — see ./types.ts for provenance.
-
 import type { TokenLookup } from './types.js';
 
 /** The MCP `params._meta` key an `mcp_kit_reader` proxy injects the token on. */

@@ -1,6 +1,6 @@
-This repository includes source derived from @keydris/kit-reader:
+This repository vendors an unchanged subset of @keydris/kit-reader source from:
 https://github.com/keydrisLabs/keydris-reader/tree/main/node/packages/kit-reader
 
-The Kit Reader source is licensed under the Apache License 2.0. The local
-adapter extends the public reader contract with downstream target binding and
-payment authorization evidence required by the Keydris payment-aware gateway.
+Those files live under src/keydris and are licensed under the Apache License
+2.0. Payment-specific gateway transport is separate application code under
+src/keydris-payment; payment policy evaluation remains in the Keydris backend.

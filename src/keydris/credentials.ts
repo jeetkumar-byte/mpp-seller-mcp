@@ -1,5 +1,3 @@
-// Vendored from @keydris/kit-reader v0.1.0 — see ./types.ts for provenance.
-
 import type { CredentialEnvelope } from './types.js';
 
 /** Applies released credentials to an outbound request, in place. */

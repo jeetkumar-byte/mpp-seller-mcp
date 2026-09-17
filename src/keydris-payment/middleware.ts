@@ -1,4 +1,4 @@
-// The mcp-use adapter for the kit reader: local code, not vendored.
+// App-local mcp-use adapter for payment-aware Keydris redemption.
 //
 // The gateway redeems a KIT action token only together with the downstream
 // target (host, path, method) of the request it authorizes — which is known
@@ -7,12 +7,12 @@
 // MCP call, and the tool spends it on the one outbound request it makes.
 
 import { getRequestBag, type McpExactMiddlewareFn } from 'mcp-use';
-import { applyCredentials } from './credentials.js';
+import { applyCredentials } from '../keydris/index.js';
 import type {
-  KitReader,
+  PaymentKitReader,
   KitTarget,
   PaymentAuthorization,
-  Redemption,
+  PaymentRedemption,
   TargetMethod,
 } from './types.js';
 
@@ -27,7 +27,7 @@ export const KIT_SPEND_VAR = 'keydris/kit-spend';
 export type KitSpend = (
   target: KitTarget,
   authorization?: PaymentAuthorization,
-) => Promise<Redemption>;
+) => Promise<PaymentRedemption>;
 
 declare module 'hono' {
   interface ContextVariableMap {
@@ -54,7 +54,7 @@ type SpendContext = {
  */
 export function keydrisCredentials(
   /** `null` = no gateway configured: the server stays up, spends refuse. */
-  reader: KitReader | null,
+  reader: PaymentKitReader | null,
 ): McpExactMiddlewareFn<'tools/call'> {
   return async (ctx, next) => {
     if (!reader) {
@@ -134,7 +134,7 @@ export type KeydrisFetchResult =
 
 export type KeydrisRequestFactory = {
   method: TargetMethod;
-  build: (release: Extract<Redemption, { ok: true }>) => RequestInit;
+  build: (release: Extract<PaymentRedemption, { ok: true }>) => RequestInit;
 };
 
 const TARGET_METHODS: ReadonlySet<string> = new Set([

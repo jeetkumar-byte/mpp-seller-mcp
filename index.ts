@@ -1,10 +1,10 @@
 import { MCPServer } from 'mcp-use';
 import { z } from 'zod';
 import {
-  createKitReader,
+  createPaymentKitReader,
   keydrisCredentials,
   keydrisFetch,
-} from './src/keydris/index.js';
+} from './src/keydris-payment/index.js';
 import {
   amountSchema,
   failed,
@@ -34,7 +34,7 @@ const server = new MCPServer({
 });
 
 const reader = config.gatewayUrl
-  ? createKitReader({
+  ? createPaymentKitReader({
       gatewayUrl: config.gatewayUrl,
       tokenHeader: config.tokenHeader,
     })
