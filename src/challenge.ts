@@ -13,6 +13,18 @@ function signature(encoded: string, secret: string): Buffer {
   return createHmac('sha256', secret).update(encoded).digest();
 }
 
+function signaturesMatch(encoded: string, encodedMac: string, secret: string): boolean {
+  // Compare the canonical encoded values instead of decoding the received MAC.
+  // Some serverless runtimes do not implement Buffer's `base64url` decoder
+  // consistently even though encoding is supported.
+  const expected = Buffer.from(
+    signature(encoded, secret).toString('base64url'),
+    'utf8',
+  );
+  const received = Buffer.from(encodedMac, 'utf8');
+  return received.length === expected.length && timingSafeEqual(received, expected);
+}
+
 export function issueChallenge(
   payload: Omit<ChallengePayload, 'id'>,
   secret: string,
@@ -38,9 +50,7 @@ export function verifyChallenge(id: string, secret: string): ChallengePayload {
   if (!match) throw new Error('The challenge id is malformed.');
 
   const [, encoded, encodedMac] = match;
-  const expected = signature(encoded, secret);
-  const received = Buffer.from(encodedMac, 'base64url');
-  if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
+  if (!signaturesMatch(encoded, encodedMac, secret)) {
     throw new Error('The challenge signature is invalid.');
   }
   return payloadSchema.parse(JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')));
