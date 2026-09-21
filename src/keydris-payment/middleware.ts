@@ -6,18 +6,19 @@
 // middleware does not redeem: it arms a one-shot spend bound to the wire-exact
 // MCP call, and the tool spends it on the one outbound request it makes.
 
-import { getRequestBag, type McpExactMiddlewareFn } from 'mcp-use';
-import { applyCredentials } from '../keydris/index.js';
+import { getRequestBag, type McpExactMiddlewareFn } from "mcp-use";
+import { applyCredentials } from "../keydris/index.js";
 import type {
   PaymentKitReader,
   KitTarget,
+  OutcomeEvidence,
   PaymentAuthorization,
   PaymentRedemption,
   TargetMethod,
-} from './types.js';
+} from "./types.js";
 
 /** The per-request context variable the middleware leaves the spend on. */
-export const KIT_SPEND_VAR = 'keydris/kit-spend';
+export const KIT_SPEND_VAR = "keydris/kit-spend";
 
 /**
  * One request's chance to redeem. Callable once: the gateway consumes the
@@ -29,9 +30,9 @@ export type KitSpend = (
   authorization?: PaymentAuthorization,
 ) => Promise<PaymentRedemption>;
 
-declare module 'hono' {
+declare module "hono" {
   interface ContextVariableMap {
-    'keydris/kit-spend': KitSpend;
+    "keydris/kit-spend": KitSpend;
   }
 }
 
@@ -55,13 +56,13 @@ type SpendContext = {
 export function keydrisCredentials(
   /** `null` = no gateway configured: the server stays up, spends refuse. */
   reader: PaymentKitReader | null,
-): McpExactMiddlewareFn<'tools/call'> {
+): McpExactMiddlewareFn<"tools/call"> {
   return async (ctx, next) => {
     if (!reader) {
       ctx.set(KIT_SPEND_VAR, async () => ({
         ok: false as const,
         problem:
-          'The Keydris gateway URL is not configured: set KEYDRIS_GATEWAY_URL to your redemption endpoint.',
+          "The Keydris gateway URL is not configured: set KEYDRIS_GATEWAY_URL to your redemption endpoint.",
       }));
       return next();
     }
@@ -82,7 +83,7 @@ export function keydrisCredentials(
         return {
           ok: false,
           problem:
-            'The KIT action token for this request was already spent: one token authorizes one outbound call.',
+            "The KIT action token for this request was already spent: one token authorizes one outbound call.",
         };
       }
       spent = true;
@@ -90,7 +91,7 @@ export function keydrisCredentials(
         (await reader.redeem(body, { header, target, authorization })) ?? {
           ok: false,
           problem:
-            'This MCP request calls no tool, so there is no action token to redeem.',
+            "This MCP request calls no tool, so there is no action token to redeem.",
         }
       );
     });
@@ -106,13 +107,13 @@ export function keydrisCredentials(
  */
 export function kitSpendFrom(ctx: SpendContext): KitSpend {
   const spend =
-    typeof ctx.get === 'function' ? ctx.get(KIT_SPEND_VAR) : undefined;
+    typeof ctx.get === "function" ? ctx.get(KIT_SPEND_VAR) : undefined;
   return (
     spend ??
     (async () => ({
       ok: false,
       problem:
-        'The Keydris kit reader middleware is not armed for this request.',
+        "The Keydris kit reader middleware is not armed for this request.",
     }))
   );
 }
@@ -127,8 +128,8 @@ export type KeydrisFetchResult =
       ok: true;
       response: Response;
       decisionId?: string;
-      approvedPayment?: import('./types.js').PaymentContext;
-      paymentConnection?: import('./types.js').PaymentConnectionEvidence;
+      approvedPayment?: import("./types.js").PaymentContext;
+      paymentConnection?: import("./types.js").PaymentConnectionEvidence;
     }
   | { ok: false; problem: string };
 
@@ -138,13 +139,13 @@ export type KeydrisRequestFactory = {
 };
 
 const TARGET_METHODS: ReadonlySet<string> = new Set([
-  'GET',
-  'POST',
-  'PUT',
-  'PATCH',
-  'DELETE',
-  'HEAD',
-  'OPTIONS',
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
 ] satisfies TargetMethod[]);
 
 /**
@@ -162,7 +163,7 @@ export async function keydrisFetch(
 ): Promise<KeydrisFetchResult> {
   const url = new URL(input);
   const method = (
-    init && 'build' in init ? init.method : (init?.method ?? 'GET')
+    init && "build" in init ? init.method : (init?.method ?? "GET")
   ).toUpperCase();
   if (!TARGET_METHODS.has(method)) {
     return {
@@ -174,7 +175,7 @@ export async function keydrisFetch(
   const redemption = await kitSpendFrom(ctx)(
     {
       host: url.hostname,
-      path: url.pathname || '/',
+      path: url.pathname || "/",
       method: method as TargetMethod,
     },
     authorization,
@@ -183,19 +184,60 @@ export async function keydrisFetch(
     return { ok: false, problem: redemption.problem };
   }
 
-  const requestInit = init && 'build' in init ? init.build(redemption) : init;
+  const requestInit = init && "build" in init ? init.build(redemption) : init;
   const headers = new Headers(requestInit?.headers);
   applyCredentials(redemption.credentials, url, headers);
-  return {
-    ok: true,
-    response: await fetch(url, {
+  let response: Response;
+  try {
+    response = await fetch(url, {
       ...requestInit,
       method,
       headers,
-      redirect: 'manual',
-    }),
+      redirect: "manual",
+    });
+  } catch (error) {
+    await redemption.reportOutcome?.({
+      outcome: "UNKNOWN",
+      error_code: "provider_network_error",
+    });
+    throw error;
+  }
+  await redemption.reportOutcome?.(await providerEvidence(response.clone()));
+  return {
+    ok: true,
+    response,
     decisionId: redemption.decisionId,
     approvedPayment: redemption.approvedPayment,
     paymentConnection: redemption.paymentConnection,
+  };
+}
+
+async function providerEvidence(response: Response): Promise<OutcomeEvidence> {
+  const body = (await response.json().catch(() => undefined)) as
+    { id?: unknown; status?: unknown; error?: { code?: unknown } } | undefined;
+  const providerOutcome =
+    typeof body?.status === "string" ? body.status : undefined;
+  const errorCode =
+    typeof body?.error?.code === "string" ? body.error.code : undefined;
+  return {
+    outcome: !response.ok
+      ? "FAILED"
+      : !providerOutcome
+        ? "UNKNOWN"
+        : ["processing", "pending", "requires_action"].includes(providerOutcome)
+          ? "UNKNOWN"
+          : [
+                "canceled",
+                "deactivated",
+                "failed",
+                "requires_confirmation",
+                "requires_payment_method",
+              ].includes(providerOutcome)
+            ? "FAILED"
+            : "SUCCEEDED",
+    provider_status: response.status,
+    ...(typeof body?.id === "string" ? { provider_request_id: body.id } : {}),
+    ...(providerOutcome ? { provider_outcome: providerOutcome } : {}),
+    ...(errorCode ? { error_code: errorCode } : {}),
   };
 }
