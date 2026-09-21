@@ -1,14 +1,14 @@
 // App-local adapter for the Keydris payment-aware gateway contract.
 // Policy evaluation and credential selection remain backend responsibilities.
 
-import { callsATool, kitActionTokenFrom } from '../keydris/index.js';
+import { callsATool, kitActionTokenFrom } from "../keydris/index.js";
 
 /** Loopback never leaves the machine, so plaintext is acceptable there — and only there. */
 function isLoopbackHost(hostname: string): boolean {
   return (
-    hostname === 'localhost' ||
-    hostname === '::1' ||
-    hostname === '[::1]' ||
+    hostname === "localhost" ||
+    hostname === "::1" ||
+    hostname === "[::1]" ||
     /^127(\.\d{1,3}){3}$/.test(hostname)
   );
 }
@@ -28,29 +28,27 @@ function assertRedeemableUrl(raw: string, allowInsecure: boolean): void {
       `gatewayUrl must be an http(s) URL, got ${JSON.stringify(raw)}`,
     );
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error(
       `gatewayUrl must be an http(s) URL, got ${JSON.stringify(raw)}`,
     );
   }
   if (
-    url.protocol === 'http:' &&
+    url.protocol === "http:" &&
     !isLoopbackHost(url.hostname) &&
     !allowInsecure
   ) {
     throw new Error(
       `gatewayUrl ${JSON.stringify(raw)} is plaintext http to a non-loopback host: ` +
-        'the redemption channel carries a live token and returns a raw secret. ' +
-        'Use https, or pass allowInsecureGatewayUrl: true for a lab setup.',
+        "the redemption channel carries a live token and returns a raw secret. " +
+        "Use https, or pass allowInsecureGatewayUrl: true for a lab setup.",
     );
   }
 }
 function tokenFrom(raw: string | undefined): string | undefined {
   const value = raw?.trim();
   if (!value) return undefined;
-  return /^bearer\s+/i.test(value)
-    ? value.replace(/^bearer\s+/i, '')
-    : value;
+  return /^bearer\s+/i.test(value) ? value.replace(/^bearer\s+/i, "") : value;
 }
 import type {
   CredentialEnvelope,
@@ -62,7 +60,7 @@ import type {
   PaymentConnectionEvidence,
   PaymentContext,
   PaymentRedemption,
-} from './types.js';
+} from "./types.js";
 
 /**
  * Accepts only the exact envelope shape the gateway publishes. Whatever the
@@ -71,16 +69,16 @@ import type {
  * refused rather than coerced.
  */
 function isCredentialEnvelope(value: unknown): value is CredentialEnvelope {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== "object") {
     return false;
   }
   const envelope = value as Record<string, unknown>;
   return (
-    (envelope.type === 'header' || envelope.type === 'query') &&
-    typeof envelope.name === 'string' &&
+    (envelope.type === "header" || envelope.type === "query") &&
+    typeof envelope.name === "string" &&
     envelope.name.length > 0 &&
-    typeof envelope.prefix === 'string' &&
-    typeof envelope.value === 'string'
+    typeof envelope.prefix === "string" &&
+    typeof envelope.value === "string"
   );
 }
 
@@ -94,7 +92,7 @@ export function createPaymentKitReader(
 ): PaymentKitReader {
   const { gatewayUrl } = options;
   assertRedeemableUrl(gatewayUrl, options.allowInsecureGatewayUrl ?? false);
-  const tokenHeader = (options.tokenHeader ?? 'authorization')
+  const tokenHeader = (options.tokenHeader ?? "authorization")
     .trim()
     .toLowerCase();
   const doFetch = options.fetch ?? globalThis.fetch;
@@ -114,15 +112,15 @@ export function createPaymentKitReader(
       return {
         ok: false,
         problem:
-          'A KIT action token redemption needs the downstream target (host, path, method) of the request it authorizes.',
+          "A KIT action token redemption needs the downstream target (host, path, method) of the request it authorizes.",
       };
     }
 
     let response: Response;
     try {
       response = await doFetch(gatewayUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify(
           context && target
             ? { token, ...context, target, ...authorization }
@@ -136,7 +134,7 @@ export function createPaymentKitReader(
     } catch {
       return {
         ok: false,
-        problem: 'The Keydris gateway could not be reached.',
+        problem: "The Keydris gateway could not be reached.",
       };
     }
 
@@ -149,33 +147,39 @@ export function createPaymentKitReader(
       };
     }
 
-    const { credentials, decision_id, approved_payment, payment_connection } =
-      (body ?? {}) as {
-        credentials?: unknown[];
-        decision_id?: unknown;
-        approved_payment?: unknown;
-        payment_connection?: unknown;
-      };
+    const {
+      credentials,
+      decision_id,
+      outcome_receipt,
+      approved_payment,
+      payment_connection,
+    } = (body ?? {}) as {
+      credentials?: unknown[];
+      decision_id?: unknown;
+      outcome_receipt?: unknown;
+      approved_payment?: unknown;
+      payment_connection?: unknown;
+    };
     if (!Array.isArray(credentials) || credentials.length === 0) {
-      return { ok: false, problem: 'The Keydris gateway released nothing.' };
+      return { ok: false, problem: "The Keydris gateway released nothing." };
     }
     if (!credentials.every(isCredentialEnvelope)) {
       return {
         ok: false,
         problem:
-          'The Keydris gateway returned a credential in a shape this reader does not recognize.',
+          "The Keydris gateway returned a credential in a shape this reader does not recognize.",
       };
     }
     if (authorization) {
       if (
-        typeof decision_id !== 'string' ||
+        typeof decision_id !== "string" ||
         !isApprovedPayment(approved_payment, authorization.payment) ||
         !isPaymentConnectionEvidence(payment_connection)
       ) {
         return {
           ok: false,
           problem:
-            'The Keydris gateway did not return payment approval evidence matching this request.',
+            "The Keydris gateway did not return payment approval evidence matching this request.",
         };
       }
       return {
@@ -184,6 +188,26 @@ export function createPaymentKitReader(
         decisionId: decision_id,
         approvedPayment: approved_payment,
         paymentConnection: payment_connection,
+        ...(typeof outcome_receipt === "string"
+          ? {
+              reportOutcome: async (evidence) => {
+                const outcomeUrl = new URL(gatewayUrl);
+                outcomeUrl.pathname = outcomeUrl.pathname.replace(
+                  /\/credentials\/?$/,
+                  "/outcomes",
+                );
+                await doFetch(outcomeUrl, {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    receipt: outcome_receipt,
+                    ...evidence,
+                  }),
+                  signal: AbortSignal.timeout(timeoutMs),
+                }).catch(() => undefined);
+              },
+            }
+          : {}),
       };
     }
     return { ok: true, credentials };
@@ -220,7 +244,7 @@ export function createPaymentKitReader(
         return {
           ok: false,
           problem:
-            'The MCP request contains conflicting Keydris action and header tokens.',
+            "The MCP request contains conflicting Keydris action and header tokens.",
         };
       }
 
@@ -245,15 +269,15 @@ export function createPaymentKitReader(
 function isPaymentConnectionEvidence(
   value: unknown,
 ): value is PaymentConnectionEvidence {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== "object") return false;
   const connection = value as Record<string, unknown>;
   return (
-    (connection.role === 'buyer' || connection.role === 'seller') &&
+    (connection.role === "buyer" || connection.role === "seller") &&
     (connection.payment_method_id === undefined ||
-      (typeof connection.payment_method_id === 'string' &&
-        connection.payment_method_id.startsWith('pm_'))) &&
+      (typeof connection.payment_method_id === "string" &&
+        connection.payment_method_id.startsWith("pm_"))) &&
     (connection.network_business_profile === undefined ||
-      typeof connection.network_business_profile === 'string')
+      typeof connection.network_business_profile === "string")
   );
 }
 
@@ -261,13 +285,13 @@ function isApprovedPayment(
   value: unknown,
   expected: PaymentContext,
 ): value is PaymentContext & { payment_connection_id: string } {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== "object") return false;
   const payment = value as Record<string, unknown>;
   return (
     payment.transaction_type === expected.transaction_type &&
     payment.amount === expected.amount &&
     payment.currency === expected.currency &&
     payment.method === expected.method &&
-    typeof payment.payment_connection_id === 'string'
+    typeof payment.payment_connection_id === "string"
   );
 }

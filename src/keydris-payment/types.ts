@@ -1,13 +1,10 @@
-import type {
-  CredentialEnvelope,
-  KitActionContext,
-} from '../keydris/types.js';
+import type { CredentialEnvelope, KitActionContext } from "../keydris/types.js";
 
 export type PaymentContext = {
-  transaction_type: 'spend' | 'refund';
+  transaction_type: "spend" | "refund";
   amount: string;
   currency: string;
-  method: 'CARD';
+  method: "CARD";
 };
 
 export type ApprovedPaymentContext = PaymentContext & {
@@ -25,9 +22,17 @@ export type PaymentAuthorization = {
 };
 
 export type PaymentConnectionEvidence = {
-  role: 'buyer' | 'seller';
+  role: "buyer" | "seller";
   payment_method_id?: string;
   network_business_profile?: string;
+};
+
+export type OutcomeEvidence = {
+  outcome: "SUCCEEDED" | "FAILED" | "UNKNOWN";
+  provider_status?: number;
+  provider_request_id?: string;
+  provider_outcome?: string;
+  error_code?: string;
 };
 
 export type PaymentRedemption =
@@ -37,17 +42,12 @@ export type PaymentRedemption =
       decisionId?: string;
       approvedPayment?: ApprovedPaymentContext;
       paymentConnection?: PaymentConnectionEvidence;
+      reportOutcome?: (evidence: OutcomeEvidence) => Promise<void>;
     }
   | { ok: false; problem: string };
 
 export type TargetMethod =
-  | 'GET'
-  | 'POST'
-  | 'PUT'
-  | 'PATCH'
-  | 'DELETE'
-  | 'HEAD'
-  | 'OPTIONS';
+  "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 
 export type KitTarget = {
   host: string;
