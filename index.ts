@@ -45,6 +45,52 @@ const reader = config.gatewayUrl
 // status will spend the action token when their governed Stripe call is wired.
 server.use('mcp:tools/call', keydrisCredentials(reader));
 
+const KIT_READER_VERSION = '0.1.0';
+const readerVerificationChallengeSchema = z.enum([
+  'missing',
+  'malformed',
+  'expired',
+  'wrong_audience',
+  'replay',
+  'valid_canary',
+]);
+
+export const readerVerification = server.tool(
+  {
+    name: 'keydris_reader_verify',
+    description:
+      'Prove that this seller MCP has the compatible Keydris KIT Reader installed.',
+    inputSchema: z.object({
+      challenge: readerVerificationChallengeSchema,
+      nonce: z.string().min(1),
+      declaredReaderVersion: z.string().min(1),
+    }),
+    outputSchema: z.object({
+      keydris_reader_verification: z.object({
+        challenge: readerVerificationChallengeSchema,
+        nonce: z.string(),
+        readerVersion: z.string(),
+        accepted: z.boolean(),
+      }),
+    }),
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  async ({ challenge, nonce }) => {
+    const evidence = {
+      keydris_reader_verification: {
+        challenge,
+        nonce,
+        readerVersion: KIT_READER_VERSION,
+        accepted: challenge === 'valid_canary',
+      },
+    };
+    return {
+      content: [{ type: 'text' as const, text: JSON.stringify(evidence) }],
+      structuredContent: evidence,
+    };
+  },
+);
+
 const lineItemSchema = z.object({
   sku: z.string(),
   name: z.string(),

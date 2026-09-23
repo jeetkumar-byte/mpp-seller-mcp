@@ -50,6 +50,15 @@ Configure the seller environment variables in Manufact before exercising its
 tools. After the first GitHub-backed deployment, pushes to the configured
 production branch redeploy this server automatically.
 
+## Marketplace admission
+
+The server exposes `keydris_reader_verify` for Keydris Marketplace admission.
+The marketplace sends one nonce-bound probe for each supported challenge. The
+tool reports the installed KIT Reader version (`0.1.0`), rejects the negative
+probes, and accepts only `valid_canary`. Publish the seller using KIT Reader
+version `0.1.0`; a different declared version fails verification instead of
+silently accepting an incompatible reader.
+
 ## Kit Reader boundary
 
 `src/keydris` is an unchanged vendored subset of the open-source Apache-2.0
