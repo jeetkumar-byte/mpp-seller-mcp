@@ -55,6 +55,16 @@ const lineItemSchema = z.object({
 
 const paymentIntentSchema = z.object({ id: z.string(), status: z.string() });
 const refundResponseSchema = z.object({ id: z.string(), status: z.string() });
+const marketplaceManifestSchema = z.object({
+  schemaVersion: z.literal('1'),
+  offers: z.array(
+    z.object({
+      toolName: z.string(),
+      amount: amountSchema,
+      currency: z.string().regex(/^[A-Z]{3}$/),
+    }),
+  ),
+});
 
 function pricedItem(sku: string, quantity: number) {
   const product = config.catalog.get(sku);
@@ -68,6 +78,40 @@ function pricedItem(sku: string, quantity: number) {
     currency: product.currency,
   };
 }
+
+export const marketplaceManifest = server.tool(
+  {
+    name: 'marketplace_manifest',
+    description:
+      'Return the server-authoritative fixed-price offer used for marketplace discovery.',
+    inputSchema: z.object({}),
+    outputSchema: marketplaceManifestSchema,
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  },
+  async () => {
+    const products = [...config.catalog.values()];
+    if (products.length !== 1) {
+      throw new Error(
+        'Marketplace publication requires exactly one fixed-price catalog item.',
+      );
+    }
+    const product = products[0];
+    const manifest = {
+      schemaVersion: '1' as const,
+      offers: [
+        {
+          toolName: 'purchase',
+          amount: product.unitAmount,
+          currency: product.currency,
+        },
+      ],
+    };
+    return {
+      content: [{ type: 'text' as const, text: JSON.stringify(manifest) }],
+      structuredContent: manifest,
+    };
+  },
+);
 
 export const quote = server.tool(
   {

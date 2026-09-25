@@ -30,6 +30,15 @@ single seller Stripe connection allowed by the runtime session's policy version
 for purchase, refund, and payment-status calls. Calls fail closed when no seller
 connection or more than one seller connection matches.
 
+## Marketplace admission
+
+The read-only `marketplace_manifest` tool exposes the price and currency for
+the `purchase` tool directly from `SELLER_CATALOG_JSON`. The current marketplace
+demo accepts exactly one fixed-price catalog item; publication fails if the
+catalog contains zero or multiple items. Keydris obtains the MCP server version
+and protocol version during normal MCP initialization, so sellers do not enter
+those values in the marketplace form.
+
 ## Develop
 
 ```bash
