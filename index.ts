@@ -28,7 +28,7 @@ import { config } from './src/config.js';
 const server = new MCPServer({
   name: 'keydris-seller-mcp',
   title: 'Keydris Seller MCP',
-  version: '0.2.0',
+  version: '0.2.1',
   description:
     'Seller merchant MCP for Stripe MPP quotes, payment challenges, governed charges, and refunds.',
 });
@@ -55,16 +55,13 @@ const lineItemSchema = z.object({
 
 const paymentIntentSchema = z.object({ id: z.string(), status: z.string() });
 const refundResponseSchema = z.object({ id: z.string(), status: z.string() });
-const marketplaceManifestSchema = z.object({
-  schemaVersion: z.literal('1'),
+const productListSchema = z.object({
   products: z.array(
     z.object({
-      productId: z.string(),
+      sku: z.string(),
       name: z.string(),
-      toolName: z.string(),
-      amount: amountSchema,
+      unitAmount: amountSchema,
       currency: z.string().regex(/^[A-Z]{3}$/),
-      arguments: z.record(z.string(), z.unknown()),
     }),
   ),
 });
@@ -82,30 +79,26 @@ function pricedItem(sku: string, quantity: number) {
   };
 }
 
-export const marketplaceManifest = server.tool(
+export const listProducts = server.tool(
   {
-    name: 'marketplace_manifest',
-    description:
-      'Return the server-authoritative fixed-price offer used for marketplace discovery.',
+    name: 'list_products',
+    description: 'List the seller catalog with authoritative unit prices.',
     inputSchema: z.object({}),
-    outputSchema: marketplaceManifestSchema,
+    outputSchema: productListSchema,
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
   async () => {
-    const manifest = {
-      schemaVersion: '1' as const,
+    const result = {
       products: [...config.catalog.values()].map((product) => ({
-        productId: product.sku,
+        sku: product.sku,
         name: product.name,
-        toolName: 'purchase',
-        amount: product.unitAmount,
+        unitAmount: product.unitAmount,
         currency: product.currency,
-        arguments: { sku: product.sku, quantity: 1 },
       })),
     };
     return {
-      content: [{ type: 'text' as const, text: JSON.stringify(manifest) }],
-      structuredContent: manifest,
+      content: [{ type: 'text' as const, text: JSON.stringify(result) }],
+      structuredContent: result,
     };
   },
 );

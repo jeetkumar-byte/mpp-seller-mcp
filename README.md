@@ -32,13 +32,12 @@ connection or more than one seller connection matches.
 
 ## Marketplace admission
 
-The read-only `marketplace_manifest` tool exposes the price and currency for
-each `purchase` product directly from `SELLER_CATALOG_JSON`. It is one supported
-catalog-discovery mechanism, not a marketplace requirement: Keydris also accepts
-the standard marketplace catalog resource, tool metadata, and conventional
-read-only product-listing tools. Keydris obtains the MCP server version and
-protocol version during normal MCP initialization, so sellers do not enter
-those values in the marketplace form.
+The read-only `list_products` tool exposes each product's SKU, name, unit price,
+and currency directly from `SELLER_CATALOG_JSON`. Keydris recognizes this common
+seller-MCP pattern and binds each product to the server's `purchase` tool during
+admission. Keydris obtains the MCP server version and protocol version during
+normal MCP initialization, so sellers do not enter those values in the
+marketplace form.
 
 ## Develop
 
