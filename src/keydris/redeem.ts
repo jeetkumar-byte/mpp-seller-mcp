@@ -1,11 +1,76 @@
 import { callsATool, kitActionTokenFrom, tokenFrom } from './token.js';
+import { readerApiUrl } from './telemetry.js';
+
+/** Loopback never leaves the machine, so plaintext is acceptable there — and only there. */
+function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname === '::1' ||
+    hostname === '[::1]' ||
+    /^127(\.\d{1,3}){3}$/.test(hostname)
+  );
+}
+
+/**
+ * Fails at construction, not at redeem time: a misconfigured gateway URL should
+ * surface as one clear error at boot, not as a per-call refusal the agent sees.
+ * Redemption posts a live token and receives a raw secret, so a non-loopback
+ * `http` endpoint is refused unless explicitly allowed.
+ */
+function assertRedeemableUrl(raw: string, allowInsecure: boolean): void {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(
+      `gatewayUrl must be an http(s) URL, got ${JSON.stringify(raw)}`,
+    );
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(
+      `gatewayUrl must be an http(s) URL, got ${JSON.stringify(raw)}`,
+    );
+  }
+  if (
+    url.protocol === 'http:' &&
+    !isLoopbackHost(url.hostname) &&
+    !allowInsecure
+  ) {
+    throw new Error(
+      `gatewayUrl ${JSON.stringify(raw)} is plaintext http to a non-loopback host: ` +
+        'the redemption channel carries a live token and returns a raw secret. ' +
+        'Use https, or pass allowInsecureGatewayUrl: true for a lab setup.',
+    );
+  }
+}
 import type {
   CredentialEnvelope,
   KitActionContext,
   KitReader,
   KitReaderOptions,
+  KitTarget,
   Redemption,
 } from './types.js';
+
+/**
+ * Accepts only the exact envelope shape the gateway publishes. Whatever the
+ * gateway (or something impersonating it) returns is about to be applied to an
+ * outbound request as a header or query parameter — an unrecognized shape is
+ * refused rather than coerced.
+ */
+function isCredentialEnvelope(value: unknown): value is CredentialEnvelope {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const envelope = value as Record<string, unknown>;
+  return (
+    (envelope.type === 'header' || envelope.type === 'query') &&
+    typeof envelope.name === 'string' &&
+    envelope.name.length > 0 &&
+    typeof envelope.prefix === 'string' &&
+    typeof envelope.value === 'string'
+  );
+}
 
 /**
  * A reader bound to one gateway. Construct it once at startup and hand it the
@@ -14,24 +79,55 @@ import type {
  */
 export function createKitReader(options: KitReaderOptions): KitReader {
   const { gatewayUrl } = options;
+  if (options.installationKey) readerApiUrl(gatewayUrl);
+  assertRedeemableUrl(gatewayUrl, options.allowInsecureGatewayUrl ?? false);
   const tokenHeader = (options.tokenHeader ?? 'authorization')
     .trim()
     .toLowerCase();
   const doFetch = options.fetch ?? globalThis.fetch;
+  const timeoutMs = options.timeoutMs ?? 10_000;
 
   async function exchange(
     token: string,
-    context?: KitActionContext,
+    context: KitActionContext | undefined,
+    target: KitTarget | undefined,
   ): Promise<Redemption> {
+    // The gateway's schema pairs them strictly: a KIT action token must arrive
+    // with both the MCP action and the downstream target, a legacy header token
+    // with neither. A tokenized call without a target is refused here, with a
+    // hint at the fix, instead of as an opaque validation error from the wire.
+    if (context && !target) {
+      return {
+        ok: false,
+        problem:
+          'A KIT action token redemption needs the downstream target (host, path, method) of the request it authorizes.',
+      };
+    }
+
     let response: Response;
     try {
       response = await doFetch(gatewayUrl, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(context ? { token, ...context } : { token }),
+        redirect: 'error',
+        headers: {
+          'content-type': 'application/json',
+          ...(options.installationKey
+            ? { authorization: `Bearer ${options.installationKey}` }
+            : {}),
+        },
+        body: JSON.stringify(
+          context && target ? { token, ...context, target } : { token },
+        ),
+        // A hung gateway must not hang the tool call: the agent needs an
+        // answer while its own request deadline is still open. Matches the
+        // Python reader's default transport timeout.
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
-      return { ok: false, problem: 'The Keydris gateway could not be reached.' };
+      return {
+        ok: false,
+        problem: 'The Keydris gateway could not be reached.',
+      };
     }
 
     const body: unknown = await response.json().catch(() => undefined);
@@ -43,14 +139,50 @@ export function createKitReader(options: KitReaderOptions): KitReader {
       };
     }
 
-    const { credentials } = body as { credentials?: CredentialEnvelope[] };
-    if (!credentials?.length) {
+    const { credentials, decision_id, outcome_receipt } = (body ?? {}) as {
+      credentials?: unknown[];
+      decision_id?: unknown;
+      outcome_receipt?: unknown;
+    };
+    if (!Array.isArray(credentials) || credentials.length === 0) {
       return { ok: false, problem: 'The Keydris gateway released nothing.' };
     }
-    return { ok: true, credentials };
+    if (!credentials.every(isCredentialEnvelope)) {
+      return {
+        ok: false,
+        problem:
+          'The Keydris gateway returned a credential in a shape this reader does not recognize.',
+      };
+    }
+    if (
+      outcome_receipt !== undefined &&
+      (typeof outcome_receipt !== 'string' ||
+        !/^kor_[A-Za-z0-9_-]{43}$/.test(outcome_receipt))
+    ) {
+      return {
+        ok: false,
+        problem: 'The gateway returned an invalid outcome receipt.',
+      };
+    }
+    return {
+      ok: true,
+      credentials,
+      ...(typeof decision_id === 'string' ? { decisionId: decision_id } : {}),
+      ...(typeof outcome_receipt === 'string'
+        ? {
+            outcomeReceipt: outcome_receipt,
+            reportOutcome: (outcome) =>
+              options.telemetry?.outcome({
+                ...outcome,
+                receipt: outcome_receipt,
+              }),
+          }
+        : {}),
+    };
   }
 
   return {
+    telemetry: options.telemetry,
     tokenHeader,
 
     callsATool,
@@ -93,7 +225,7 @@ export function createKitReader(options: KitReaderOptions): KitReader {
         };
       }
 
-      return exchange(token, kitActionToken.context);
+      return exchange(token, kitActionToken.context, source?.target);
     },
   };
 }
