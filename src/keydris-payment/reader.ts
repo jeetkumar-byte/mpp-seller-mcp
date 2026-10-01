@@ -1,7 +1,11 @@
 // App-local adapter for the Keydris payment-aware gateway contract.
 // Policy evaluation and credential selection remain backend responsibilities.
 
-import { callsATool, kitActionTokenFrom } from "../keydris/index.js";
+import {
+  callsATool,
+  kitActionTokenFrom,
+  readerApiUrl,
+} from "../keydris/index.js";
 
 /** Loopback never leaves the machine, so plaintext is acceptable there — and only there. */
 function isLoopbackHost(hostname: string): boolean {
@@ -91,6 +95,7 @@ export function createPaymentKitReader(
   options: PaymentKitReaderOptions,
 ): PaymentKitReader {
   const { gatewayUrl } = options;
+  if (options.installationKey) readerApiUrl(gatewayUrl);
   assertRedeemableUrl(gatewayUrl, options.allowInsecureGatewayUrl ?? false);
   const tokenHeader = (options.tokenHeader ?? "authorization")
     .trim()
@@ -120,7 +125,13 @@ export function createPaymentKitReader(
     try {
       response = await doFetch(gatewayUrl, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        redirect: "error",
+        headers: {
+          "content-type": "application/json",
+          ...(options.installationKey
+            ? { authorization: `Bearer ${options.installationKey}` }
+            : {}),
+        },
         body: JSON.stringify(
           context && target
             ? { token, ...context, target, ...authorization }
@@ -170,6 +181,34 @@ export function createPaymentKitReader(
           "The Keydris gateway returned a credential in a shape this reader does not recognize.",
       };
     }
+    if (
+      outcome_receipt !== undefined &&
+      (typeof outcome_receipt !== "string" ||
+        !/^kor_[A-Za-z0-9_-]{43}$/.test(outcome_receipt))
+    ) {
+      return {
+        ok: false,
+        problem: "The gateway returned an invalid outcome receipt.",
+      };
+    }
+    const outcomeReporting =
+      typeof outcome_receipt === "string"
+        ? {
+            outcomeReceipt: outcome_receipt,
+            reportOutcome: (evidence: import("./types.js").OutcomeEvidence) => {
+              options.telemetry?.outcome({
+                receipt: outcome_receipt,
+                outcome: evidence.outcome,
+                ...(evidence.provider_status !== undefined
+                  ? { provider_status: evidence.provider_status }
+                  : {}),
+                ...(evidence.error_code
+                  ? { error_code: evidence.error_code }
+                  : {}),
+              });
+            },
+          }
+        : {};
     if (authorization) {
       if (
         typeof decision_id !== "string" ||
@@ -188,32 +227,14 @@ export function createPaymentKitReader(
         decisionId: decision_id,
         approvedPayment: approved_payment,
         paymentConnection: payment_connection,
-        ...(typeof outcome_receipt === "string"
-          ? {
-              reportOutcome: async (evidence) => {
-                const outcomeUrl = new URL(gatewayUrl);
-                outcomeUrl.pathname = outcomeUrl.pathname.replace(
-                  /\/credentials\/?$/,
-                  "/outcomes",
-                );
-                await doFetch(outcomeUrl, {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({
-                    receipt: outcome_receipt,
-                    ...evidence,
-                  }),
-                  signal: AbortSignal.timeout(timeoutMs),
-                }).catch(() => undefined);
-              },
-            }
-          : {}),
+        ...outcomeReporting,
       };
     }
-    return { ok: true, credentials };
+    return { ok: true, credentials, ...outcomeReporting };
   }
 
   return {
+    telemetry: options.telemetry,
     tokenHeader,
 
     callsATool,
