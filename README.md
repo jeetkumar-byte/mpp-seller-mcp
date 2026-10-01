@@ -15,11 +15,18 @@ and payment status through the Keydris policy gateway.
 Copy `.env.example` to `.env` for local development. Set these values in
 Manufact for hosted deployments:
 
-- `KEYDRIS_GATEWAY_URL`
+- `KEYDRIS_API_URL`
+- `KEYDRIS_MCP_KEY`
 - `STRIPE_NETWORK_ID`
 - `SELLER_CHALLENGE_SIGNING_SECRET`
 - `SELLER_CATALOG_JSON`
 - `SELLER_CHALLENGE_TTL_SECONDS` (optional)
+
+`KEYDRIS_API_URL` and `KEYDRIS_MCP_KEY` must be configured together with the
+values issued when this MCP is enrolled. The reader uses that installation
+identity to authenticate credential redemption, register its capabilities,
+send a heartbeat, and report tool and provider outcomes. `KEYDRIS_GATEWAY_URL`
+remains an unenrolled legacy fallback when neither enrollment variable is set.
 
 Normal MCP requests carry the single-use token in
 `params._meta["keydris/kit_action_token"]`.

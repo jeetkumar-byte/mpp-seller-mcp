@@ -1,3 +1,4 @@
+import type { ReaderTelemetry } from "../keydris/telemetry.js";
 import type { CredentialEnvelope, KitActionContext } from "../keydris/types.js";
 
 export type PaymentContext = {
@@ -42,7 +43,8 @@ export type PaymentRedemption =
       decisionId?: string;
       approvedPayment?: ApprovedPaymentContext;
       paymentConnection?: PaymentConnectionEvidence;
-      reportOutcome?: (evidence: OutcomeEvidence) => Promise<void>;
+      outcomeReceipt?: string;
+      reportOutcome?: (evidence: OutcomeEvidence) => void;
     }
   | { ok: false; problem: string };
 
@@ -57,6 +59,8 @@ export type KitTarget = {
 
 export type PaymentKitReaderOptions = {
   gatewayUrl: string;
+  installationKey?: string;
+  telemetry?: ReaderTelemetry;
   allowInsecureGatewayUrl?: boolean;
   tokenHeader?: string;
   fetch?: typeof globalThis.fetch;
@@ -64,6 +68,7 @@ export type PaymentKitReaderOptions = {
 };
 
 export type PaymentKitReader = {
+  readonly telemetry?: ReaderTelemetry;
   readonly tokenHeader: string;
   callsATool(body: unknown): boolean;
   redeem(

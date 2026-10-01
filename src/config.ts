@@ -23,6 +23,8 @@ function catalogFromEnvironment(): Map<string, Product> {
 const requestedTtl = Number(process.env.SELLER_CHALLENGE_TTL_SECONDS ?? '300');
 
 export const config = {
+  apiUrl: process.env.KEYDRIS_API_URL,
+  installationKey: process.env.KEYDRIS_MCP_KEY,
   gatewayUrl:
     process.env.KEYDRIS_GATEWAY_URL ??
     'https://dev.api.keydris.com/gateway/credentials',

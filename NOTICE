@@ -1,5 +1,5 @@
-This repository vendors an unchanged subset of @keydris/kit-reader source from:
-https://github.com/keydrisLabs/keydris-reader/tree/main/node/packages/kit-reader
+This repository vendors an unchanged subset of @keydris/kit-reader v0.3.0 source from:
+https://github.com/keydrisLabs/keydris-reader/tree/2bcaec9/node/packages/kit-reader
 
 Those files live under src/keydris and are licensed under the Apache License
 2.0. Payment-specific gateway transport is separate application code under

@@ -7,7 +7,11 @@
 // MCP call, and the tool spends it on the one outbound request it makes.
 
 import { getRequestBag, type McpExactMiddlewareFn } from "mcp-use";
-import { applyCredentials } from "../keydris/index.js";
+import {
+  applyCredentials,
+  kitActionTokenFrom,
+  observeTool,
+} from "../keydris/index.js";
 import type {
   PaymentKitReader,
   KitTarget,
@@ -95,7 +99,12 @@ export function keydrisCredentials(
         }
       );
     });
-    return next();
+    return observeTool(
+      reader.telemetry,
+      ctx.params.name,
+      kitActionTokenFrom(body).token,
+      next,
+    );
   };
 }
 

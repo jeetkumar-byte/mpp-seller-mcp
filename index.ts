@@ -6,6 +6,10 @@ import {
   keydrisFetch,
 } from './src/keydris-payment/index.js';
 import {
+  createReaderTelemetry,
+  readerApiUrl,
+} from './src/keydris/index.js';
+import {
   amountSchema,
   failed,
   isExpired,
@@ -33,9 +37,27 @@ const server = new MCPServer({
     'Seller merchant MCP for Stripe MPP quotes, payment challenges, governed charges, and refunds.',
 });
 
-const reader = config.gatewayUrl
+if (Boolean(config.apiUrl) !== Boolean(config.installationKey)) {
+  throw new Error('Set both KEYDRIS_API_URL and KEYDRIS_MCP_KEY');
+}
+const telemetry =
+  config.apiUrl && config.installationKey
+    ? createReaderTelemetry({
+        apiUrl: config.apiUrl,
+        apiKey: config.installationKey,
+        onDropped: () => console.warn('Keydris telemetry delivery dropped'),
+      })
+    : undefined;
+telemetry?.start();
+
+const gatewayUrl = config.apiUrl
+  ? new URL('gateway/credentials', readerApiUrl(config.apiUrl)).href
+  : config.gatewayUrl;
+const reader = gatewayUrl
   ? createPaymentKitReader({
-      gatewayUrl: config.gatewayUrl,
+      gatewayUrl,
+      installationKey: config.installationKey,
+      telemetry,
       tokenHeader: config.tokenHeader,
     })
   : null;
